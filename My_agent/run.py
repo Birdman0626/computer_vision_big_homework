@@ -1,0 +1,60 @@
+import os,time,copy,torch,shutil,dashscope,concurrent,re
+from PIL import Image, ImageDraw
+
+from My_agent.percept import get_perception_infos
+
+from dashscope import MultiModalConversation
+
+from modelscope.pipelines import pipeline
+from modelscope.utils.constant import Tasks
+from modelscope import snapshot_download, AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+
+if __name__ == '__main__':
+    ### Load ocr model and icon detection model.
+    groundingdino_dir = snapshot_download('AI-ModelScope/GroundingDINO', revision='v1.0.0')
+    groundingdino_model = pipeline('grounding-dino-task', model=groundingdino_dir)
+    ocr_detection = pipeline(Tasks.ocr_detection, model='damo/cv_resnet18_ocr-detection-line-level_damo')
+    ocr_recognition = pipeline(Tasks.ocr_recognition, model='damo/cv_convnextTiny_ocr-recognition-document_damo')
+    
+    ### Get all the images name in the datasets.
+    path_dir = './My_agent/dataset_1'
+    output_dir = './My_agent/dataset_1_output'
+    temp_dir = './My_agent/temp'
+    
+    if not os.path.exists(path_dir):
+        raise "No dataset error!"
+
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
+    
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    os.mkdir(temp_dir)
+    
+    file_list = os.listdir(path_dir)
+    image_list, xml_list = list(), list()
+    for file in file_list:
+        _, ExtensionName = os.path.splitext(file)
+        if ExtensionName == '.png':
+            image_list.append(file)
+        elif ExtensionName == '.xml':
+            xml_list.append(file)
+
+    
+    ### Get the interception message by walking through the dataset.
+    for i in range(len(image_list)):
+        file = image_list[i]
+        output_file = image_list[i]
+        
+        # TODO: argumentise.
+        perception_infos, width, height = get_perception_infos(
+            input_file_dir = path_dir,
+            file = file, 
+            output_file = output_file, 
+            font_path = '/System/Library/Fonts/Times.ttc',
+            ocr_detection = ocr_detection,
+            ocr_recognition = ocr_recognition,
+            groundingdino_model = groundingdino_model
+        )
+        
