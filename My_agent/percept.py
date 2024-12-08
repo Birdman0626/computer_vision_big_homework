@@ -1,9 +1,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import os,time,copy,torch,shutil,dashscope,concurrent,re,modelscope,random
 
-from My_agent.text_localization import ocr
-from My_agent.icon_localization import det
-from My_agent.merge_strategy import merge_boxes_and_texts, merge_all_icon_boxes, merge_boxes_and_texts_new
+from icon_localization import det
+from merge_strategy import merge_all_icon_boxes
 
 def cmyk_to_rgb(c, m, y, k):
     r = 255 * (1.0 - c / 255) * (1.0 - k / 255)
@@ -60,13 +59,20 @@ def split_image_into_4(input_image_prefix: str,input_image: str, output_image_pr
         sub_img = img.crop(box)
         sub_img.save(f"{output_image_prefix}_part_{i+1}.png")
 
+def crop(image, box, i):
+    image = Image.open(image)
+    x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+    if x1 >= x2-10 or y1 >= y2-10:
+        return
+    cropped_image = image.crop((x1, y1, x2, y2))
+    cropped_image.save(f"./My_agent/temp/{i}.png")
 
 def get_perception_infos(
     input_file_prefix: str,
     file:str, 
+    output_file_prefix:str,
     output_file:str, 
-    font_path:str, ocr_detection:modelscope.Pipeline, 
-    ocr_recognition:modelscope.Pipeline,
+    font_path:str,
     groundingdino_model:modelscope.Pipeline
     ) -> tuple[dict, int, int]:
     """
@@ -84,34 +90,36 @@ def get_perception_infos(
         total width, total height(int,int): the size of the image.
     """
     
-    total_width, total_height = Image.open(file).size
+    total_width, total_height = Image.open(input_file_prefix + '/' + file).size
 
     # Partition Image into 4 parts
     fileName, _ = os.path.splitext(file)
-    split_image_into_4(input_file_prefix, file, f'./MyAgent/temp/{fileName}')
-    img_list = [f'./MyAgent/temp/{fileName}_part_1.png', f'./MyAgent/temp/{fileName}_part_2.png',
-                f'./MyAgent/temp/{fileName}_part_3.png', f'./MyAgent/temp/{fileName}_part_4.png']
+    split_image_into_4(input_file_prefix, file, f'./My_agent/temp/{fileName}')
+    img_list = [f'./My_agent/temp/{fileName}_part_1.png', f'./My_agent/temp/{fileName}_part_2.png',
+                f'./My_agent/temp/{fileName}_part_3.png', f'./My_agent/temp/{fileName}_part_4.png']
     img_x_list = [0, total_width/2, 0, total_width/2]
     img_y_list = [0, 0, total_height/2, total_height/2]
     coordinates = []
     texts = []
     padding = total_height * 0.0025  # 10
 
-    for i, img in enumerate(img_list):
-        width, height = Image.open(img).size
+    # 寻找到图像的文字，识别文字并且给出文字框坐标。这里使用的是ocr检测(ocr-detect)+ocr识别(ocr-recognition).
+    # for i, img in enumerate(img_list):
+    #     width, height = Image.open(img).size
 
-        sub_text, sub_coordinates = ocr(img, ocr_detection, ocr_recognition)
-        for coordinate in sub_coordinates:
-            coordinate[0] = int(max(0, img_x_list[i] + coordinate[0] - padding))
-            coordinate[2] = int(min(total_width, img_x_list[i] + coordinate[2] + padding))
-            coordinate[1] = int(max(0, img_y_list[i] + coordinate[1] - padding))
-            coordinate[3] = int(min(total_height,img_y_list[i] + coordinate[3] + padding))
+    #     sub_text, sub_coordinates = ocr(img, ocr_detection, ocr_recognition)
+    #     for coordinate in sub_coordinates:
+    #         coordinate[0] = int(max(0, img_x_list[i] + coordinate[0] - padding))
+    #         coordinate[2] = int(min(total_width, img_x_list[i] + coordinate[2] + padding))
+    #         coordinate[1] = int(max(0, img_y_list[i] + coordinate[1] - padding))
+    #         coordinate[3] = int(min(total_height,img_y_list[i] + coordinate[3] + padding))
 
-        sub_text_merge, sub_coordinates_merge = merge_boxes_and_texts_new(sub_text, sub_coordinates)
-        coordinates.extend(sub_coordinates_merge)
-        texts.extend(sub_text_merge)
-    merged_text, merged_text_coordinates = merge_boxes_and_texts(texts, coordinates)
+    #     sub_text_merge, sub_coordinates_merge = merge_boxes_and_texts_new(sub_text, sub_coordinates)
+    #     coordinates.extend(sub_coordinates_merge)
+    #     texts.extend(sub_text_merge)
+    # merged_text, merged_text_coordinates = merge_boxes_and_texts(texts, coordinates)
 
+    # 使用groundingDino 识别图标。
     coordinates = []
     for i, img in enumerate(img_list):
         width, height = Image.open(img).size
@@ -126,72 +134,66 @@ def get_perception_infos(
         coordinates.extend(sub_coordinates)
     merged_icon_coordinates = merge_all_icon_boxes(coordinates)
 
-    rec_list = merged_text_coordinates + merged_icon_coordinates
-    draw_coordinates_boxes_on_image(file, copy.deepcopy(rec_list), output_file, font_path)
+    # rec_list = merged_text_coordinates + merged_icon_coordinates
+    draw_coordinates_boxes_on_image(input_file_prefix+'/'+file, copy.deepcopy(merged_icon_coordinates), output_file_prefix+'/'+output_file, font_path)
     
     
     mark_number = 0
     perception_infos = []
 
-    for i in range(len(merged_text_coordinates)):
-        if args.use_som == 1 and args.draw_text_box == 1:
-            mark_number += 1
-            perception_info = {"text": "mark number: " + str(mark_number) + " text: " + merged_text[i], "coordinates": merged_text_coordinates[i]}
-        else:
-            perception_info = {"text": "text: " + merged_text[i], "coordinates": merged_text_coordinates[i]}
-        perception_infos.append(perception_info)
+    # for i in range(len(merged_text_coordinates)):
+    #     mark_number += 1
+    #     perception_info = {"text": "mark number: " + str(mark_number) + " text: " + merged_text[i], "coordinates": merged_text_coordinates[i]}
+    #     perception_infos.append(perception_info)
 
     for i in range(len(merged_icon_coordinates)):
-        if args.use_som == 1:
-            mark_number += 1
-            perception_info = {"text": "mark number: " + str(mark_number) + " icon", "coordinates": merged_icon_coordinates[i]}
-        else:
-            perception_info = {"text": "icon", "coordinates": merged_icon_coordinates[i]}
+        mark_number += 1
+        perception_info = {"text": "mark number: " + str(mark_number) + " icon", "coordinates": merged_icon_coordinates[i]}
         perception_infos.append(perception_info)
     
-    if args.icon_caption == 1:
-        image_box = []
-        image_id = []
-        for i in range(len(perception_infos)):
-            # if perception_infos[i]['text'] == 'icon':
-            if 'icon' in perception_infos[i]['text']: # TODO
-                image_box.append(perception_infos[i]['coordinates'])
-                image_id.append(i)
+    # if args.icon_caption == 1:
+    image_box = []
+    image_id = []
+    for i in range(len(perception_infos)):
+        # if perception_infos[i]['text'] == 'icon':
+        if 'icon' in perception_infos[i]['text']: # TODO
+            image_box.append(perception_infos[i]['coordinates'])
+            image_id.append(i)
 
-        for i in range(len(image_box)):
-            crop(file, image_box[i], image_id[i])
+    for i in range(len(image_box)):
+        crop(input_file_prefix+'/'+file, image_box[i], image_id[i])
 
-        images = get_all_files_in_folder(temp_file)
-        if len(images) > 0:
-            images = sorted(images, key=lambda x: int(x.split('/')[-1].split('.')[0]))
-            image_id = [int(image.split('/')[-1].split('.')[0]) for image in images]
-            icon_map = {}
-            prompt = 'This image is an icon from a computer screen. Please briefly describe the shape and color of this icon in one sentence.'
-            if caption_call_method == "local":
-                for i in range(len(images)):
-                    image_path = os.path.join(temp_file, images[i])
-                    icon_width, icon_height = Image.open(image_path).size
-                    if icon_height > 0.8 * height or icon_width * icon_height > 0.2 * width * height:
-                        des = "None"
-                    else:
-                        des = generate_local(tokenizer, model, image_path, prompt)
-                    icon_map[i+1] = des
-            else:
-                for i in range(len(images)):
-                    images[i] = os.path.join(temp_file, images[i])
-                icon_map = generate_api(images, prompt)
-            for i, j in zip(image_id, range(1, len(image_id)+1)):
-                if icon_map.get(j):
-                    perception_infos[i]['text'] += ": " + icon_map[j]
+        # images = get_all_files_in_folder(temp_file)
+        # if len(images) > 0:
+        #     images = sorted(images, key=lambda x: int(x.split('/')[-1].split('.')[0]))
+        #     image_id = [int(image.split('/')[-1].split('.')[0]) for image in images]
+        #     icon_map = {}
+        #     prompt = 'This image is an icon from a computer screen. Please briefly describe the shape and color of this icon in one sentence.'
+        #     if caption_call_method == "local":
+        #         for i in range(len(images)):
+        #             image_path = os.path.join(temp_file, images[i])
+        #             icon_width, icon_height = Image.open(image_path).size
+        #             if icon_height > 0.8 * height or icon_width * icon_height > 0.2 * width * height:
+        #                 des = "None"
+        #             else:
+        #                 des = generate_local(tokenizer, model, image_path, prompt)
+        #             icon_map[i+1] = des
+        #     else:
+        #         for i in range(len(images)):
+        #             images[i] = os.path.join(temp_file, images[i])
+        #         icon_map = generate_api(images, prompt)
+        #     for i, j in zip(image_id, range(1, len(image_id)+1)):
+        #         if icon_map.get(j):
+        #             perception_infos[i]['text'] += ": " + icon_map[j]
 
-    if args.location_info == 'center':
-        for i in range(len(perception_infos)):
-            perception_infos[i]['coordinates'] = [int((perception_infos[i]['coordinates'][0]+perception_infos[i]['coordinates'][2])/2), int((perception_infos[i]['coordinates'][1]+perception_infos[i]['coordinates'][3])/2)]
-    elif args.location_info == 'icon_center':
-        for i in range(len(perception_infos)):
-            if 'icon' in perception_infos[i]['text']:
-                perception_infos[i]['coordinates'] = [
-                    int((perception_infos[i]['coordinates'][0] + perception_infos[i]['coordinates'][2]) / 2),
-                    int((perception_infos[i]['coordinates'][1] + perception_infos[i]['coordinates'][3]) / 2)]
+    # if args.location_info == 'center':
+    for i in range(len(perception_infos)):
+        perception_infos[i]['coordinates'] = [int((perception_infos[i]['coordinates'][0]+perception_infos[i]['coordinates'][2])/2), int((perception_infos[i]['coordinates'][1]+perception_infos[i]['coordinates'][3])/2)]
+    # elif args.location_info == 'icon_center':
+    #     for i in range(len(perception_infos)):
+    #         if 'icon' in perception_infos[i]['text']:
+    #             perception_infos[i]['coordinates'] = [
+    #                 int((perception_infos[i]['coordinates'][0] + perception_infos[i]['coordinates'][2]) / 2),
+    #                 int((perception_infos[i]['coordinates'][1] + perception_infos[i]['coordinates'][3]) / 2)]
 
     return perception_infos, total_width, total_height

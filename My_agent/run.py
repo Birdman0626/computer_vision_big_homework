@@ -1,7 +1,7 @@
 import os,time,copy,torch,shutil,dashscope,concurrent,re
 from PIL import Image, ImageDraw
 
-from My_agent.percept import get_perception_infos
+from percept import get_perception_infos
 
 from dashscope import MultiModalConversation
 
@@ -43,18 +43,21 @@ if __name__ == '__main__':
 
     
     ### Get the interception message by walking through the dataset.
+    perception_infos_list, width_list, height_list = list(),list(),list()
     for i in range(len(image_list)):
         file = image_list[i]
         output_file = image_list[i]
         
         # TODO: argumentise.
         perception_infos, width, height = get_perception_infos(
-            input_file_dir = path_dir,
+            input_file_prefix = path_dir,
             file = file, 
+            output_file_prefix = output_dir,
             output_file = output_file, 
             font_path = '/System/Library/Fonts/Times.ttc',
-            ocr_detection = ocr_detection,
-            ocr_recognition = ocr_recognition,
             groundingdino_model = groundingdino_model
         )
+        perception_infos_list.append(perception_infos)
+        width_list.append(width)
+        height_list.append(height)
         
