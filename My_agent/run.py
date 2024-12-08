@@ -1,20 +1,14 @@
-import os,time,copy,torch,shutil,dashscope,concurrent,re
-from PIL import Image, ImageDraw
+import os,shutil
 
 from percept import get_perception_infos
 
-from dashscope import MultiModalConversation
-
 from modelscope.pipelines import pipeline
-from modelscope.utils.constant import Tasks
-from modelscope import snapshot_download, AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+from modelscope import snapshot_download
 
 if __name__ == '__main__':
     ### Load ocr model and icon detection model.
     groundingdino_dir = snapshot_download('AI-ModelScope/GroundingDINO', revision='v1.0.0')
     groundingdino_model = pipeline('grounding-dino-task', model=groundingdino_dir)
-    ocr_detection = pipeline(Tasks.ocr_detection, model='damo/cv_resnet18_ocr-detection-line-level_damo')
-    ocr_recognition = pipeline(Tasks.ocr_recognition, model='damo/cv_convnextTiny_ocr-recognition-document_damo')
     
     ### Get all the images name in the datasets.
     path_dir = './My_agent/dataset_1'

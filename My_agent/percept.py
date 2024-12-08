@@ -1,5 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
-import os,time,copy,torch,shutil,dashscope,concurrent,re,modelscope,random
+import os,copy,modelscope,random,shutil
 
 from icon_localization import det
 from merge_strategy import merge_all_icon_boxes
@@ -59,13 +59,13 @@ def split_image_into_4(input_image_prefix: str,input_image: str, output_image_pr
         sub_img = img.crop(box)
         sub_img.save(f"{output_image_prefix}_part_{i+1}.png")
 
-def crop(image, box, i):
-    image = Image.open(image)
+def crop(file, file_name, box, i):
+    image = Image.open(file)
     x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     if x1 >= x2-10 or y1 >= y2-10:
         return
     cropped_image = image.crop((x1, y1, x2, y2))
-    cropped_image.save(f"./My_agent/temp/{i}.png")
+    cropped_image.save(f"./My_agent/temp/{file_name}/icon_{i}.png")
 
 def get_perception_infos(
     input_file_prefix: str,
@@ -93,33 +93,19 @@ def get_perception_infos(
     total_width, total_height = Image.open(input_file_prefix + '/' + file).size
 
     # Partition Image into 4 parts
+    # TODO: remove split.
     fileName, _ = os.path.splitext(file)
-    split_image_into_4(input_file_prefix, file, f'./My_agent/temp/{fileName}')
-    img_list = [f'./My_agent/temp/{fileName}_part_1.png', f'./My_agent/temp/{fileName}_part_2.png',
-                f'./My_agent/temp/{fileName}_part_3.png', f'./My_agent/temp/{fileName}_part_4.png']
+    temp_file_prefix = './My_agent/temp/'
+    split_image_into_4(input_file_prefix, file, temp_file_prefix+f'{fileName}')
+    img_list = [temp_file_prefix+f'{fileName}_part_1.png', temp_file_prefix+f'{fileName}_part_2.png',
+                temp_file_prefix+f'{fileName}_part_3.png', temp_file_prefix+f'{fileName}_part_4.png']
     img_x_list = [0, total_width/2, 0, total_width/2]
     img_y_list = [0, 0, total_height/2, total_height/2]
     coordinates = []
     texts = []
     padding = total_height * 0.0025  # 10
 
-    # 寻找到图像的文字，识别文字并且给出文字框坐标。这里使用的是ocr检测(ocr-detect)+ocr识别(ocr-recognition).
-    # for i, img in enumerate(img_list):
-    #     width, height = Image.open(img).size
-
-    #     sub_text, sub_coordinates = ocr(img, ocr_detection, ocr_recognition)
-    #     for coordinate in sub_coordinates:
-    #         coordinate[0] = int(max(0, img_x_list[i] + coordinate[0] - padding))
-    #         coordinate[2] = int(min(total_width, img_x_list[i] + coordinate[2] + padding))
-    #         coordinate[1] = int(max(0, img_y_list[i] + coordinate[1] - padding))
-    #         coordinate[3] = int(min(total_height,img_y_list[i] + coordinate[3] + padding))
-
-    #     sub_text_merge, sub_coordinates_merge = merge_boxes_and_texts_new(sub_text, sub_coordinates)
-    #     coordinates.extend(sub_coordinates_merge)
-    #     texts.extend(sub_text_merge)
-    # merged_text, merged_text_coordinates = merge_boxes_and_texts(texts, coordinates)
-
-    # 使用groundingDino 识别图标。
+    # 使用groundingDino 识别图标。然后绘制图标框。
     coordinates = []
     for i, img in enumerate(img_list):
         width, height = Image.open(img).size
@@ -133,19 +119,10 @@ def get_perception_infos(
         sub_coordinates = merge_all_icon_boxes(sub_coordinates)
         coordinates.extend(sub_coordinates)
     merged_icon_coordinates = merge_all_icon_boxes(coordinates)
-
-    # rec_list = merged_text_coordinates + merged_icon_coordinates
     draw_coordinates_boxes_on_image(input_file_prefix+'/'+file, copy.deepcopy(merged_icon_coordinates), output_file_prefix+'/'+output_file, font_path)
-    
     
     mark_number = 0
     perception_infos = []
-
-    # for i in range(len(merged_text_coordinates)):
-    #     mark_number += 1
-    #     perception_info = {"text": "mark number: " + str(mark_number) + " text: " + merged_text[i], "coordinates": merged_text_coordinates[i]}
-    #     perception_infos.append(perception_info)
-
     for i in range(len(merged_icon_coordinates)):
         mark_number += 1
         perception_info = {"text": "mark number: " + str(mark_number) + " icon", "coordinates": merged_icon_coordinates[i]}
@@ -160,31 +137,13 @@ def get_perception_infos(
             image_box.append(perception_infos[i]['coordinates'])
             image_id.append(i)
 
+    # 此处裁剪图片并且存在对应路径中。
+    file_name, _ = os.path.splitext(file)
+    if os.path.exists(f"./My_agent/temp/{file_name}"):
+        shutil.rmtree(f"./My_agent/temp/{file_name}")
+    os.mkdir(f"./My_agent/temp/{file_name}")
     for i in range(len(image_box)):
-        crop(input_file_prefix+'/'+file, image_box[i], image_id[i])
-
-        # images = get_all_files_in_folder(temp_file)
-        # if len(images) > 0:
-        #     images = sorted(images, key=lambda x: int(x.split('/')[-1].split('.')[0]))
-        #     image_id = [int(image.split('/')[-1].split('.')[0]) for image in images]
-        #     icon_map = {}
-        #     prompt = 'This image is an icon from a computer screen. Please briefly describe the shape and color of this icon in one sentence.'
-        #     if caption_call_method == "local":
-        #         for i in range(len(images)):
-        #             image_path = os.path.join(temp_file, images[i])
-        #             icon_width, icon_height = Image.open(image_path).size
-        #             if icon_height > 0.8 * height or icon_width * icon_height > 0.2 * width * height:
-        #                 des = "None"
-        #             else:
-        #                 des = generate_local(tokenizer, model, image_path, prompt)
-        #             icon_map[i+1] = des
-        #     else:
-        #         for i in range(len(images)):
-        #             images[i] = os.path.join(temp_file, images[i])
-        #         icon_map = generate_api(images, prompt)
-        #     for i, j in zip(image_id, range(1, len(image_id)+1)):
-        #         if icon_map.get(j):
-        #             perception_infos[i]['text'] += ": " + icon_map[j]
+        crop(input_file_prefix+'/'+file, file_name, image_box[i], image_id[i])
 
     # if args.location_info == 'center':
     for i in range(len(perception_infos)):
