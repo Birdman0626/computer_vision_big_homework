@@ -57,6 +57,8 @@ def make_dict(path:str) -> dict:
             coord.append(int(data.text))
         image_info['range'].append(coord)
     
+    return image_info
+    
     
 if __name__ == '__main__':
     """
@@ -69,7 +71,7 @@ if __name__ == '__main__':
     # So we should skip it.
     images_info = []
     for directory in os.listdir('./datasets'):
-        if directory == '.DS_Store':
+        if directory == '.DS_Store' or directory == 'dataset.pkl':
             continue
         # inside the directory, list all files. Read the base name and skip the same file.
         prefix = f'./datasets/{directory}'
@@ -81,6 +83,8 @@ if __name__ == '__main__':
             images_info.append(image_info)
             fileBaseName = fileNewBaseName
     
+    if os.path.exists('./datasets/dataset.pkl'):
+        os.remove('./datasets/dataset.pkl')
     fileHandler = open('./datasets/dataset.pkl','wb')
     pickle.dump(images_info, fileHandler)
     
