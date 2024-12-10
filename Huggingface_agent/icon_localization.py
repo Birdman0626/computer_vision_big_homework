@@ -1,5 +1,4 @@
-from PCAgent.crop import calculate_size, calculate_iou
-from modelscope.pipelines import pipeline
+from crop import calculate_size, calculate_iou
 from PIL import Image
 import torch
 
@@ -25,8 +24,8 @@ def remove_boxes(boxes_filt, size, iou_threshold=0.5):
     return boxes_filt
 
 
-def det(input_image_path, caption, groundingdino_model, box_threshold=0.05, text_threshold=0.5):
-    image = Image.open(input_image_path)
+def det(input_image_path, caption, groundingdino_model, processor, device, box_threshold=0.05, text_threshold=0.5):
+    image = Image.open(input_image_path).convert("RGB")
     size = image.size
 
     caption = caption.lower()
@@ -34,23 +33,28 @@ def det(input_image_path, caption, groundingdino_model, box_threshold=0.05, text
     if not caption.endswith('.'):
         caption = caption + '.'
     
-    inputs = {
-        'IMAGE_PATH': input_image_path,
-        'TEXT_PROMPT': caption,
-        'BOX_TRESHOLD': box_threshold,
-        'TEXT_TRESHOLD': text_threshold
-    }
+    inputs = processor(images=image, text=caption, return_tensors="pt").to(device)
+    with torch.no_grad():
+        outputs = groundingdino_model(**inputs)
+    
+    result = processor.post_process_grounded_object_detection(
+        outputs,
+        inputs.input_ids,
+        box_threshold=box_threshold,
+        text_threshold=text_threshold,
+        target_sizes=[image.size[::-1]]
+    )[0]
+    
+    boxes_filt = result['boxes'].detach().cpu().int().tolist()
 
-    result = groundingdino_model(inputs)
-    boxes_filt = result['boxes']
+    # H, W = size[1], size[0]
+    # for i in range(boxes_filt.size(0)):
+    #     boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
+    #     boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
+    #     boxes_filt[i][2:] += boxes_filt[i][:2]
 
-    H, W = size[1], size[0]
-    for i in range(boxes_filt.size(0)):
-        boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
-        boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
-        boxes_filt[i][2:] += boxes_filt[i][:2]
-
-    boxes_filt = boxes_filt.cpu().int().tolist()
+    # boxes_filt = boxes_filt.cpu().int().tolist()
+    
     filtered_boxes = remove_boxes(boxes_filt, size)  # [:9]
     coordinates = []
     for box in filtered_boxes:
