@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from PCAgent.crop import crop_image, calculate_size
+from crop import crop_image, calculate_size
 from PIL import Image
 
 
