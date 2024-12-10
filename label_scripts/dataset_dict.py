@@ -75,13 +75,13 @@ if __name__ == '__main__':
             continue
         # inside the directory, list all files. Read the base name and skip the same file.
         prefix = f'./datasets/{directory}'
-        fileBaseName = ''
+        fileBaseList=list()
         for file in os.listdir(prefix):
-            fileNewBaseName, _ = os.path.splitext(file)
-            if fileBaseName == fileNewBaseName: continue
-            image_info = make_dict(f'{prefix}/{fileNewBaseName}.xml')
+            fileBaseName, _ = os.path.splitext(file)
+            if fileBaseList.count(fileBaseName) > 0: continue
+            image_info = make_dict(f'{prefix}/{fileBaseName}.xml')
             images_info.append(image_info)
-            fileBaseName = fileNewBaseName
+            fileBaseList.append(fileBaseName)
     
     if os.path.exists('./datasets/dataset.pkl'):
         os.remove('./datasets/dataset.pkl')
