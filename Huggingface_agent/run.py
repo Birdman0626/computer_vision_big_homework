@@ -5,7 +5,7 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 if __name__ == '__main__':
     ### Load ocr model and icon detection model.
-    device = 'cuda' if torch.cuda.is_available else 'cpu'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     processor = AutoProcessor.from_pretrained('./model')
     model = AutoModelForZeroShotObjectDetection.from_pretrained('./model').to(device)
 
