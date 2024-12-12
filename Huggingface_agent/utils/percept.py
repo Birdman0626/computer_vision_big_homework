@@ -122,7 +122,7 @@ def get_perception_infos(
         sub_coordinates = merge_all_icon_boxes(sub_coordinates)
         coordinates.extend(sub_coordinates)
     merged_icon_coordinates = merge_all_icon_boxes(coordinates)
-    draw_coordinates_boxes_on_image(file, copy.deepcopy(merged_icon_coordinates), output_file_prefix+'/'+output_file, font_path)
+    draw_coordinates_boxes_on_image(file, copy.deepcopy(merged_icon_coordinates), output_file_prefix+'/'+fileBaseName, font_path)
     
     mark_number = 0
     perception_infos = []
