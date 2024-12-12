@@ -50,6 +50,7 @@ if __name__ == '__main__':
         torch_empty_cache_steps=500,
         remove_unused_columns=False,
         dataloader_pin_memory=False,
+        use_cpu = True if not torch.cuda.is_available() else False
     )
     
     trainer = Trainer(

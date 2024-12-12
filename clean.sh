@@ -1,0 +1,1 @@
+rm -rf ckpt ./Huggingface_agent/output ./Huggingface_agent/temp
