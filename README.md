@@ -8,3 +8,4 @@ For My-agent, this will download model by `modelscope.snapdownload` under .cache
 
 <img width="1093" alt="Screenshot 2024-12-10 at 12 05 31" src="https://github.com/user-attachments/assets/28eba408-6991-4211-956f-74271042234e">
 
+- 完成微调部分的代码。 2024.12.12 20:36
