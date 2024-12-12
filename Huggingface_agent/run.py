@@ -1,23 +1,20 @@
-import os,shutil
+import os,shutil,torch,pickle
 
-from percept import get_perception_infos
+from utils.percept import get_perception_infos
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 if __name__ == '__main__':
     ### Load ocr model and icon detection model.
-    device = 'cpu'
+    device = 'cuda' if torch.cuda.is_available else 'cpu'
     processor = AutoProcessor.from_pretrained('./model')
     model = AutoModelForZeroShotObjectDetection.from_pretrained('./model').to(device)
 
     
     ### Get all the images name in the datasets.
-    path_dir = './Huggingface_agent/dataset_1'
-    output_dir = './Huggingface_agent/dataset_1_output'
+    path_dir = './datasets/'
+    output_dir = './Huggingface_agent/output'
     temp_dir = './Huggingface_agent/temp'
     
-    if not os.path.exists(path_dir):
-        raise "No dataset error!"
-
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
@@ -26,15 +23,13 @@ if __name__ == '__main__':
         shutil.rmtree(temp_dir)
     os.mkdir(temp_dir)
     
-    file_list = os.listdir(path_dir)
-    image_list, xml_list = list(), list()
-    for file in file_list:
-        _, ExtensionName = os.path.splitext(file)
-        if ExtensionName == '.png':
-            image_list.append(file)
-        elif ExtensionName == '.xml':
-            xml_list.append(file)
-
+    fileHandler = open('./datasets/dataset.pkl','rb')
+    dataset = pickle.load(fileHandler)
+    fileHandler.close()
+    
+    image_list = []
+    for i in dataset:
+        image_list.append(f'{i["image_path"]}')
     
     ### Get the interception message by walking through the dataset.
     perception_infos_list, width_list, height_list = list(),list(),list()
@@ -44,7 +39,7 @@ if __name__ == '__main__':
         
         # TODO: argumentise.
         perception_infos, width, height = get_perception_infos(
-            input_file_prefix = path_dir,
+            temp_file_prefix = temp_dir,
             file = file, 
             output_file_prefix = output_dir,
             output_file = output_file, 

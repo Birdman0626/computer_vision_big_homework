@@ -1,4 +1,4 @@
-from crop import calculate_size, calculate_iou
+from utils.crop import calculate_size, calculate_iou
 from PIL import Image
 import torch
 

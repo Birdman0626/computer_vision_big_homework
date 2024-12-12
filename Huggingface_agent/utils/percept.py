@@ -1,8 +1,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import os,copy,random,shutil
 
-from icon_localization import det
-from merge_strategy import merge_all_icon_boxes
+from utils.icon_localization import det
+from utils.merge_strategy import merge_all_icon_boxes
 
 def cmyk_to_rgb(c, m, y, k):
     r = 255 * (1.0 - c / 255) * (1.0 - k / 255)
@@ -40,8 +40,8 @@ def draw_coordinates_boxes_on_image(image_path, coordinates, output_image_path, 
     image = image.convert('RGB')
     image.save(output_image_path)
 
-def split_image_into_4(input_image_prefix: str,input_image: str, output_image_prefix: str) -> None:
-    img = Image.open(input_image_prefix+'/'+input_image)
+def split_image_into_4(input_image: str, output_image_prefix: str) -> None:
+    img = Image.open(input_image)
     width, height = img.size
 
     sub_width = width // 2
@@ -59,16 +59,16 @@ def split_image_into_4(input_image_prefix: str,input_image: str, output_image_pr
         sub_img = img.crop(box)
         sub_img.save(f"{output_image_prefix}_part_{i+1}.png")
 
-def crop(file, file_name, box, i):
+def crop(file, file_name, box, i, temp):
     image = Image.open(file)
     x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     if x1 >= x2-10 or y1 >= y2-10:
         return
     cropped_image = image.crop((x1, y1, x2, y2))
-    cropped_image.save(f"./My_agent/temp/{file_name}/icon_{i}.png")
+    cropped_image.save(f"{temp}/{file_name}/icon_{i}.png")
 
 def get_perception_infos(
-    input_file_prefix: str,
+    temp_file_prefix:str,
     file:str, 
     output_file_prefix:str,
     output_file:str, 
@@ -80,7 +80,7 @@ def get_perception_infos(
     """_summary_
 
     Args:
-        input_file_prefix (str): _description_
+        temp_file_prefix (str):
         file (str): _description_
         output_file_prefix (str): _description_
         output_file (str): _description_
@@ -93,15 +93,15 @@ def get_perception_infos(
         tuple[dict, int, int]: _description_
     """
     
-    total_width, total_height = Image.open(input_file_prefix + '/' + file).size
+    total_width, total_height = Image.open(file).size
 
     # Partition Image into 4 parts
     # TODO: remove split.
-    fileName, _ = os.path.splitext(file)
-    temp_file_prefix = './My_agent/temp/'
-    split_image_into_4(input_file_prefix, file, temp_file_prefix+f'{fileName}')
-    img_list = [temp_file_prefix+f'{fileName}_part_1.png', temp_file_prefix+f'{fileName}_part_2.png',
-                temp_file_prefix+f'{fileName}_part_3.png', temp_file_prefix+f'{fileName}_part_4.png']
+    fileBaseName = os.path.basename(file)
+    fileName, _ = os.path.splitext(fileBaseName)
+    split_image_into_4(file, temp_file_prefix+f'/{fileName}')
+    img_list = [temp_file_prefix+f'/{fileName}_part_1.png', temp_file_prefix+f'/{fileName}_part_2.png',
+                temp_file_prefix+f'/{fileName}_part_3.png', temp_file_prefix+f'/{fileName}_part_4.png']
     img_x_list = [0, total_width/2, 0, total_width/2]
     img_y_list = [0, 0, total_height/2, total_height/2]
     coordinates = []
@@ -122,7 +122,7 @@ def get_perception_infos(
         sub_coordinates = merge_all_icon_boxes(sub_coordinates)
         coordinates.extend(sub_coordinates)
     merged_icon_coordinates = merge_all_icon_boxes(coordinates)
-    draw_coordinates_boxes_on_image(input_file_prefix+'/'+file, copy.deepcopy(merged_icon_coordinates), output_file_prefix+'/'+output_file, font_path)
+    draw_coordinates_boxes_on_image(file, copy.deepcopy(merged_icon_coordinates), output_file_prefix+'/'+output_file, font_path)
     
     mark_number = 0
     perception_infos = []
@@ -141,12 +141,12 @@ def get_perception_infos(
             image_id.append(i)
 
     # 此处裁剪图片并且存在对应路径中。
-    file_name, _ = os.path.splitext(file)
-    if os.path.exists(f"./My_agent/temp/{file_name}"):
-        shutil.rmtree(f"./My_agent/temp/{file_name}")
-    os.mkdir(f"./My_agent/temp/{file_name}")
+    file_name, _ = os.path.splitext(fileBaseName)
+    if os.path.exists(f"{temp_file_prefix}/{file_name}"):
+        shutil.rmtree(f"{temp_file_prefix}/{file_name}")
+    os.mkdir(f"{temp_file_prefix}/{file_name}")
     for i in range(len(image_box)):
-        crop(input_file_prefix+'/'+file, file_name, image_box[i], image_id[i])
+        crop(file, file_name, image_box[i], image_id[i], temp_file_prefix)
 
     # if args.location_info == 'center':
     for i in range(len(perception_infos)):
