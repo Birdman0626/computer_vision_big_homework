@@ -1,0 +1,14 @@
+train:
+  data_dir: '.'
+  # if this file is project/config/default.yaml, 
+  # then working dir is project, 
+  # and ckpt_dir is project/ckpt_dir
+  ckpt_dir: './ckpt_dir' 
+  batch_size: 8
+  num_workers: 0
+  max_epoch: 100
+  device: 'cuda:0'
+  learning_rate: 0.0008
+model:
+  num_classes: 4
+  image_size: [3, 512, 512]
