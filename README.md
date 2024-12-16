@@ -2,7 +2,9 @@
 
 For huggingface-agent, download [model](https://jbox.sjtu.edu.cn/l/313Ker) and put files under model directory.
 
-For My-agent, this will download model by `modelscope.snapdownload` under .cache file(in mac). Be aware of your disk space.
+~~For My-agent, this will download model by `modelscope.snapdownload` under .cache file(in mac). Be aware of your disk space.~~
+
+- My-agent has been removed. 2024.12.16 10:10
 
 ## TODO
 
