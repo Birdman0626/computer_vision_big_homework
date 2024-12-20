@@ -102,7 +102,7 @@ def loss_helper(res,labels, device):
         if overbatch_loss == None:
             overbatch_loss = loss_giou + loss_bbox
         else:
-            overbatch_loss += loss_giou/loss_giou.detach() + loss_bbox/loss_bbox.detach()
+            overbatch_loss += loss_giou + loss_bbox
     overbatch_loss /= len(image_size)
     return overbatch_loss
 
