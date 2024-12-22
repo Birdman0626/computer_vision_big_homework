@@ -10,7 +10,8 @@ def TP_P_num_sum(csv_results, threshod):
     P_num_sum = 0
     threshod = float('%.4f' % threshod)
     if ERR_S == threshod and ERR_S != 0:
-        err = open('error_analysis_{}_{}.csv'.format(CLASS_NAME, ERR_S), "w", newline='')
+        #err = open('error_analysis_{}_{}.csv'.format(CLASS_NAME, ERR_S), "w", newline='')
+        err = open('error_analysis_2_{}_{}.csv'.format("iou", ERR_S), "w", newline='')
         visualization_FP_wrt = csv.writer(err)
         visualization_FP_wrt.writerow(["图片名", "坐标", "分数", "err_type"])
     for csv_result in csv_results:
@@ -92,6 +93,7 @@ def TP_P_num_sum(csv_results, threshod):
             # csv_wrt.writerow((img_name, len(xml_coords), len(img_coords), loop_num))
             # print img_name,len(xml_coords),len(img_coords),loop_num
         TP_num_sum += loop_num
+        #TP_num_sum += min(rows, cols)
 
     return TP_num_sum, P_num_sum
 
@@ -102,27 +104,35 @@ def run():
     group_truth_num_sum = 0
     for parent, _, files in os.walk(IMG_ROOT):
         for file in files:
-            xml_path = os.path.join(XML_ROOT, file[:-4] + '.xml')
+            file_path = os.path.join(parent, file)
+            relative_path = os.path.relpath(file_path, IMG_ROOT)
+            xml_path = os.path.join(XML_ROOT, relative_path[:-4] + '.xml')
+            #xml_path = os.path.join(XML_ROOT, file[:-4] + '.xml')
             coords = parse_xml(xml_path, CLASS_NAME)
-            group_truth_num_sum += len(coords)
-
+            group_truth_num_sum += len(coords) 
+            
+    #group_truth_num_sum = 1537 
+    #group_truth_num_sum = 766 
+    
     print("group_truth_num_sum:%d" % group_truth_num_sum)
 
-    #
     precisions = list()
     recalls = list()
     ap = 0
 
     # 根据阈值，计算FP的累加数量 以及 预测框的累加个数
     csv_results = parse_csv(CSV_PATH, CLASS_NAME)
-    with open(CLASS_NAME + str(IOU_THRESH) + ".csv", 'w', newline='') as t_file:  # newline=''
+    #with open(CLASS_NAME + str(IOU_THRESH) + ".csv", 'w', newline='') as t_file:  # newline=''
+    with open("output_analysis_4/iou" + str(IOU_THRESH) + ".csv", 'w', newline='') as t_file:
         csv_write = csv.writer(t_file)
         csv_write.writerow(("threshod", "precision", "recall", "TP_num_sum", "P_num_sum"))
-        for threshod in np.linspace(0.1, 1.0, 181):  # 设置阈值个数
+        for threshod in np.linspace(0, 1.0, 181):  # 设置阈值个数
             print("threshod: %f " % threshod)
             TP_num_sum, P_num_sum = TP_P_num_sum(csv_results, threshod)
+            # if threshod == 0:
+            #     group_truth_num_sum = TP_num_sum
             print(TP_num_sum, P_num_sum)
-            precision = float(TP_num_sum) / (P_num_sum + 1e-05)
+            precision = float(TP_num_sum + 1e-05) / (P_num_sum + 1e-05)
             recall = float(TP_num_sum) / (group_truth_num_sum + 1e-05)
             print("precision: %f, recall: %f" % (precision, recall))
             row = (threshod, precision, recall, TP_num_sum, P_num_sum)
@@ -142,13 +152,15 @@ def run():
 
 
 if __name__ == '__main__':
-    IOU_THRESH = 0.5                         # IOU
-    ERR_S = 0.3                              # 可视化阈值下的错误图片坐标。为0不写，为0.3即分析该阈值下的
-    IMG_ROOT = r'F:\mayun\map\test_pics'     # 图片路径
-    XML_ROOT = r'F:\mayun\map\test_xml'      # 图片对应xml标注文件路径
-    OTT_IMG_ROOT = r'F:\mayun\map\out_pics'  # 漏报误报错误可视化图片路径
-    CSV_PATH = r'F:\mayun\map\out.csv'       # 算法输出结果： img_name, x_min y_min w h, confidence, CLASS_NAME
-    CLASS_NAME = 'person'
+    #IOU_THRESH = 0.2               # IOU
+    ERR_S = 0                          # 可视化阈值下的错误图片坐标。为0不写，为0.3即分析该阈值下的
+    IMG_ROOT = r'E:\python_works\computer_vision\big_homework_fixed\dataset'     # 图片路径
+    XML_ROOT = r'E:\python_works\computer_vision\big_homework_fixed\dataset_fixed_capital_scrollable_level'  # 图片对应ground truth xml标注文件路径
+    #OTT_IMG_ROOT = r'E:\python_works\computer_vision\big_homework_fixed\out_pics'  # 漏报误报错误可视化图片路径
+    CSV_PATH = r'E:\python_works\computer_vision\big_homework\output.csv'       # 算法本体输出结果： img_name, x_min y_min w h, confidence, CLASS_NAME
+    CLASS_NAME = ['clickable', 'disabled', 'selectable','scrollable']
+    #CLASS_NAME = ['scrollable']
 
-    run()
-    err_drawing(CLASS_NAME, ERR_S, IMG_ROOT, OTT_IMG_ROOT)
+    for IOU_THRESH in np.arange(0.2, 0.55, 0.1):
+        run()
+    #err_drawing(CLASS_NAME, ERR_S, IMG_ROOT, OTT_IMG_ROOT)
