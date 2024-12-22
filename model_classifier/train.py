@@ -3,18 +3,18 @@ from torch.nn import functional as F, Module
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
+import torchvision.transforms as tr
 from tqdm import tqdm
 from argparse import ArgumentParser
-from model import Classifier
 import yaml
 from pathlib import Path
 import pickle
-import torchvision.transforms as tr
-import time
+
+from model_classifier import Classifier
 
 torch.manual_seed(42)
 
-eps = 1e-12
+eps =1e-12
 root_transform_method = tr.Compose([
     tr.ToTensor(),
     tr.Resize(size=(512,512))
@@ -26,7 +26,7 @@ icon_transform_method = tr.Compose([
 ])
         
 class pic_dataset(Dataset):
-    def __init__(self, dataset_path = "./dataset_4lists.pkl"):
+    def __init__(self, dataset_path = "../dataset_5lists.pkl"):
         super(pic_dataset, self).__init__()
         fileHandler = open(dataset_path,'rb')
         dataset = pickle.load(fileHandler)
@@ -50,7 +50,6 @@ class pic_dataset(Dataset):
         #print(root_image.shape, icon_image.shape, icon_pos.shape, icon_label)
         return icon_image, root_image, icon_pos, icon_label
 
-
 class AverageMeter:
     def __init__(self):
         self.reset()
@@ -65,21 +64,26 @@ class AverageMeter:
         self.sum += n*val
         self.avg = self.sum/self.cnt
 
-def focal_loss(pred:torch.Tensor, lbl:torch.Tensor):
-    '''
-    通过修改loss来缓解数据不平衡
+class FocalLoss:
+    def __init__(self, alpha:list[float], gamma:float = torch.e):
+        #ALPHA = torch.tensor([0.8,1,1.1,0.7,1.5], dtype=torch.float32).to(pred.device)
+        #GAMMA = torch.e
+        self.alpha = torch.tensor(alpha, dtype=torch.float32)
+        self.alpha /= torch.sum(self.alpha)
+        self.gamma = gamma
+    def __call__(self, pred:torch.Tensor, lbl:torch.Tensor):
+        '''
+        通过修改loss来缓解数据不平衡
 
-    Params:
-        pred(Tensor): 预测值，形状(B, num_classes)
-        lbl(Tensor): 真值，形状(B,)
-    Returns:
-        修改后的CrossEntropy损失
-    '''
-    #ALPHA = torch.tensor([0.25,1,1,10]).to(pred.device)
-    ALPHA = torch.tensor([1,1,1,1]).to(pred.device)
-    GAMMA = torch.e
-    q = F.one_hot(lbl, pred.shape[1])
-    return torch.sum(-q*ALPHA*((1-pred)**GAMMA)*torch.log(pred + eps))
+        Params:
+            pred(Tensor): 预测值，形状(B, num_classes)
+            lbl(Tensor): 真值，形状(B,)
+        Returns:
+            修改后的CrossEntropy损失
+        '''
+        alpha, gamma = self.alpha.to(pred.device), self.gamma
+        q = F.one_hot(lbl, pred.shape[1])
+        return torch.sum(-q*alpha*((1-pred)**gamma)*torch.log(pred + eps))
 
 def train_epoch(
     model: Module,
@@ -123,6 +127,7 @@ def train_epoch(
                 idx = 0
                 if scheduler is not None:
                     scheduler.step(losses.avg)
+                    
 @torch.no_grad()
 def test_epoch(
     model:Module,
@@ -161,21 +166,12 @@ def test_epoch(
             # 显示
             processBar.set_postfix(acc = f'{right_cnt/sum_cnt*100:.3f}%', loss = f'{losses.avg:.4f}')
     return right_cnt/sum_cnt
-            
-def load_checkpoint(
-    model:Module,
-    optimizer:optim.Optimizer,
-    file:str,
-    map_location = 'cpu'
-):
-    d = torch.load(file, map_location)
-    model.load_state_dict(d['model_state'])
-    optimizer.load_state_dict(d['optimizer_state'])
+
             
 def main():
     # args
     parser = ArgumentParser()
-    parser.add_argument('--config', type=str, default='default')
+    parser.add_argument('--config', type=str, default='class_5')
     args = parser.parse_args()
     with open('./config/'+args.config+'.yaml', 'r') as config_file:
         config = yaml.safe_load(config_file)
@@ -199,27 +195,31 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=config['train']['learning_rate'], momentum=0.3)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=10)
     flag = False
+    loss_function = FocalLoss(config['train']['alpha'])
+    tqdm.write(f"alpha: {config['train']['alpha']}")
     try:
         for epoch in range(1, config['train']['max_epoch']):
             train_epoch(
                 model, train_loader, 
                 optimizer, scheduler, 
-                epoch, device, focal_loss
+                epoch, device, loss_function
             )
             flag = True
-            acc = test_epoch(model, train_loader, device, epoch, focal_loss)
+            acc = test_epoch(model, train_loader, device, epoch, loss_function)
     # auto saving
     except KeyboardInterrupt:
-        tqdm.write('You exited '+ ('saving...' if flag else ''))
+        tqdm.write('You exited\n'+ ('Saving...' if flag else ''))
     except Exception as err:
         raise err
     finally:
         if flag:
+            # name = 'model-5-classes'
+            name = config['name']
             torch.save({
                 'model_state':model.state_dict(),
                 'optimizer_state':optimizer.state_dict()
-            }, str(ckpt_dir/'model-4-classes.ckpt'))
-            tqdm.write('Saving as '+ str(ckpt_dir/'model-4-classes.ckpt'))
+            }, str(ckpt_dir/f'{name}.ckpt'))
+            tqdm.write('Saving as '+ str(ckpt_dir/f'{name}.ckpt'))
             
 if __name__=='__main__':
     main()
