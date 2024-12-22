@@ -110,9 +110,6 @@ def run():
             #xml_path = os.path.join(XML_ROOT, file[:-4] + '.xml')
             coords = parse_xml(xml_path, CLASS_NAME)
             group_truth_num_sum += len(coords) 
-            
-    #group_truth_num_sum = 1537 
-    #group_truth_num_sum = 766 
     
     print("group_truth_num_sum:%d" % group_truth_num_sum)
 
