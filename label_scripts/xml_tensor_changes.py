@@ -30,6 +30,7 @@ def xml2tensor(file_name: str) -> list[tuple[torch.Tensor, torch.Tensor]]:
         info_list.append((torch.tensor([x_center, y_center, width, height]), one_hot))
     return info_list
 
+@torch.no_grad()
 def tensor2xml(tensor_list: list[tuple[torch.Tensor, torch.Tensor]], file_name: str):
     """change a list info of tensor into an xml file
 
@@ -60,6 +61,50 @@ def tensor2xml(tensor_list: list[tuple[torch.Tensor, torch.Tensor]], file_name: 
     tree = ET.ElementTree(root)
     indent(tree, '\t')
     tree.write(file_name)
+
+@torch.no_grad()
+def tensor2xml2(file_name: str, icon_boxes: list, pred: torch.Tensor, root_info: list):
+    LABEL_LIST = ['clickable', 'disabled', 'selectable','scrollable']
+    root = ET.Element("annotation")
+    root_level = ET.SubElement(root, "object")
+    name = ET.SubElement(root_level, "name")
+    name.text = "root"
+    bndbox = ET.SubElement(root_level, "bndbox")
+    x_min, y_min, x_max, y_max = root_info
+    x_min_element = ET.SubElement(bndbox, "x_min")
+    x_min_element.text = str(int(x_min))
+    y_min_element = ET.SubElement(bndbox, "y_min")
+    y_min_element.text = str(int(y_min))
+    x_max_element = ET.SubElement(bndbox, "x_max")
+    x_max_element.text = str(int(x_max))
+    y_max_element = ET.SubElement(bndbox, "y_max")
+    y_max_element.text = str(int(y_max))
+    
+    for i, icon_rect in enumerate(icon_boxes):
+        
+        x_min, y_min, x_max, y_max = icon_rect
+        idx = torch.argmax(pred[i])
+        if idx == 4: continue
+        label = LABEL_LIST[idx]
+        
+        object = ET.SubElement(root, "object")
+        name = ET.SubElement(object, "name")
+        name.text = label
+        bndbox = ET.SubElement(object, "bndbox")
+        x_min_element = ET.SubElement(bndbox, "x_min")
+        x_min_element.text = str(int(x_min))
+        y_min_element = ET.SubElement(bndbox, "y_min")
+        y_min_element.text = str(int(y_min))
+        x_max_element = ET.SubElement(bndbox, "x_max")
+        x_max_element.text = str(int(x_max))
+        y_max_element = ET.SubElement(bndbox, "y_max")
+        y_max_element.text = str(int(y_max))
+    
+    tree = ET.ElementTree(root)
+    indent(tree, '\t')
+    tree.write(file_name)
+
+
 
 
 input_file_name = "dataset_fixed_capital_scrollable/coredraw/frame_1.xml"
