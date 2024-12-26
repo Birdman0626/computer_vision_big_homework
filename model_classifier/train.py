@@ -1,20 +1,20 @@
-import torch
+import torch, yaml, pickle
 from torch.nn import functional as F, Module
+from torch.nn import Module
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
 import torchvision.transforms as tr
 from tqdm import tqdm
 from argparse import ArgumentParser
-import yaml
 from pathlib import Path
-import pickle
-
 from model_classifier import Classifier
 
+#set seeds and constants
 torch.manual_seed(42)
-
 eps =1e-12
+
+#transform methods
 root_transform_method = tr.Compose([
     tr.ToTensor(),
     tr.Resize(size=(512,512))
@@ -26,6 +26,8 @@ icon_transform_method = tr.Compose([
 ])
         
 class pic_dataset(Dataset):
+    """training dataset
+    """
     def __init__(self, dataset_path = "../dataset_5lists.pkl"):
         super(pic_dataset, self).__init__()
         fileHandler = open(dataset_path,'rb')
@@ -51,6 +53,8 @@ class pic_dataset(Dataset):
         return icon_image, root_image, icon_pos, icon_label
 
 class AverageMeter:
+    """tool for calculating
+    """
     def __init__(self):
         self.reset()
     def reset(self):
@@ -72,15 +76,16 @@ class FocalLoss:
         self.alpha /= torch.sum(self.alpha)
         self.gamma = gamma
     def __call__(self, pred:torch.Tensor, lbl:torch.Tensor):
-        '''
-        通过修改loss来缓解数据不平衡
+        """
+        loss = -\sum q \cdot \alpha \cdot (1-pred)^{\gamma} \cdot (pred + \eps)
 
-        Params:
-            pred(Tensor): 预测值，形状(B, num_classes)
-            lbl(Tensor): 真值，形状(B,)
+        Args:
+            pred (torch.Tensor): the pred label, shape should be (Batch, num_classes)
+            lbl (torch.Tensor): the true label, shape should be (Batch,)
+
         Returns:
-            修改后的CrossEntropy损失
-        '''
+            _type_: loss
+        """
         alpha, gamma = self.alpha.to(pred.device), self.gamma
         q = F.one_hot(lbl, pred.shape[1])
         return torch.sum(-q*alpha*((1-pred)**gamma)*torch.log(pred + eps))
@@ -94,17 +99,22 @@ def train_epoch(
     device = 'cpu',
     loss_function = F.cross_entropy
 )->None:
-    '''
-    训练一个epoch
-    Params:
-        model(Module): 模型
-        train_loader(DataLoader): 训练数据集
-        optimizer(Optimizer): 优化器
-        scheduler: 学习率调整，默认为None
-        epoch(int): 当前epoch
-        device: 设备，默认cpu
-        loss_function: loss函数，默认cross_entropy
-    '''
+    """train function
+
+    Args:
+        model (Module): the model
+        train_loader (DataLoader): the training dataset
+        optimizer (optim.Optimizer): the optimizer for model
+        scheduler (ReduceLROnPlateau, optional): the scheduler for lr. Defaults to None.
+        epoch (int, optional): epoches for training. Defaults to 1.
+        device (str, optional): device for data. Defaults to 'cpu'.
+        loss_function (function, optional): function to calculate loss. 
+            should be loss_function(pred, lbl), 
+            in which:
+            pred (torch.Tensor): the pred label, shape should be (Batch, num_classes)
+            lbl (torch.Tensor): the true label, shape should be (Batch,)
+            Defaults to F.cross_entropy.
+    """
     model.train()
     losses = AverageMeter()
     idx = 0
@@ -136,18 +146,23 @@ def test_epoch(
     epoch:int = 1,
     loss_function = F.cross_entropy
 ):
-    '''
-    测试
-    
-    Params:
-        model(Module): 模型
-        test_loader(DataLoader): 数据集
-        device: 默认cpu
-        epoch(int): 当前epoch
-        loss_function: 默认cross entropy
+    """test function
+
+    Args:
+        model (Module): the model
+        train_loader (DataLoader): the testing dataset
+        device (str, optional): device for data. Defaults to 'cpu'.
+        epoch (int, optional): epoches for testing. Defaults to 1.
+        loss_function (function, optional): function to calculate loss. 
+            should be loss_function(pred, lbl), 
+            in which:
+            pred (torch.Tensor): the pred label, shape should be (Batch, num_classes)
+            lbl (torch.Tensor): the true label, shape should be (Batch,)
+            Defaults to F.cross_entropy.
+
     Returns:
         accuracy: 准确率
-    '''
+    """
     model.eval()
     losses = AverageMeter()
     right_cnt = 0
@@ -175,6 +190,7 @@ def main():
     args = parser.parse_args()
     with open('./config/'+args.config+'.yaml', 'r') as config_file:
         config = yaml.safe_load(config_file)
+        
     # data
     data_dir = Path(config['train']['data_dir']).absolute()
     ckpt_dir = Path(config['train']['ckpt_dir']).absolute()
@@ -189,13 +205,14 @@ def main():
         num_workers=config["train"]["num_workers"],
         shuffle=True
     )
+    
     # train
     device = config['train']['device']
     model = Classifier(**config['model']).to(device=device)
     optimizer = optim.SGD(model.parameters(), lr=config['train']['learning_rate'], momentum=0.3)
     scheduler = ReduceLROnPlateau(optimizer, mode='min', patience=10)
     flag = False
-    loss_function = FocalLoss(config['train']['alpha'])
+    loss_function = FocalLoss(config['train']['alpha'], gamma=0.)
     tqdm.write(f"alpha: {config['train']['alpha']}")
     try:
         for epoch in range(1, config['train']['max_epoch']):
